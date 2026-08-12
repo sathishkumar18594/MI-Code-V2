@@ -1,0 +1,10 @@
+data/
+data_v2/
+logs/
+output/
+tmp/
+reports/
+.upstox.env
+__pycache__/
+**/__pycache__/
+**/.DS_Store

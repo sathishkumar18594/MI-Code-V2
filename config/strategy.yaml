@@ -1,0 +1,119 @@
+strategy:
+  portfolio_size: 10
+  rebalance_day: 21
+
+live_tracking:
+  initial_signal_date: 2026-07-09
+
+market_hedge:
+  enabled: false
+  symbol: GOLDBEES
+
+liquidity:
+  average_daily_traded_value_window: 20
+  min_average_daily_traded_value: 5000000  # ₹50 lakh
+
+market_cap_filter:
+  enabled: true
+  min_market_cap_crore: 5000
+  data_file: data_v2/upstox/manifests/nifty500_isin_market_cap_timeline_2016_2026.csv
+
+circuit_filter:
+  enabled: true
+  lookback_days: 252
+  max_consecutive_hits: 5
+
+universe:
+  name: NIFTY500
+
+  market_filter:
+    enabled: true
+    index:
+      name: NIFTY500
+      symbol: "^CRSLDX"
+    timeframe: WEEKLY
+
+  # name: NIFTYMIDCAP150
+
+  # market_filter:
+  #   enabled: true
+  #   index:
+  #     name: NIFTYMIDCAP150
+  #     symbol: "NIFTYMIDCAP150"
+  #   timeframe: WEEKLY
+
+  # name: NIFTY50
+
+  # market_filter:
+  #   enabled: true
+  #   index:
+  #     name: NIFTY50
+  #     symbol: "^NSEI"
+  #   timeframe: WEEKLY
+
+    supertrend:
+      period: 1
+      multiplier: 2.5
+
+calendar:
+  trading_days_per_month: 21
+  trading_days_per_year: 252
+
+momentum:
+  windows:
+    - 3
+    - 6
+    - 9
+
+volatility:
+  window: 3
+  annualized: true
+
+scoring:
+  normalization: minmax
+  factors:
+    return_9m:
+      enabled: true
+      weight: 0.35
+      higher_is_better: true
+
+    return_6m:
+      enabled: true
+      weight: 0.40
+      higher_is_better: true
+
+    return_3m:
+      enabled: true
+      weight: 0.25
+      higher_is_better: true
+
+    volatility_3m:
+      enabled: true
+      weight: 0.20
+      higher_is_better: false
+
+
+portfolio:
+  initial_capital: 1000000
+  equal_weight: true
+
+indicators:
+  enabled:
+    - momentum
+    - volatility
+    - risk_adjusted_momentum
+
+charges:
+  brokerage:
+    delivery: 0.0
+  stt:
+    delivery_buy: 0.001
+    delivery_sell: 0.001
+  exchange:
+    nse: 0.0000297
+  sebi:
+    turnover: 0.000001
+  gst:
+    percentage: 0.18
+  stamp_duty:
+    delivery: 0.00015

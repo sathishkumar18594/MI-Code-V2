@@ -1,0 +1,57 @@
+# Independent sector sleeves.  Every sector is a separate universe and is
+# screened/rebalanced using its own benchmark trend.  Overlapping constituents
+# are prevented from being held by more than one sleeve on each rebalance.
+strategy_name: 2020 Eligible Sector Momentum Portfolio
+initial_capital: 1000000
+# Each sleeve independently rotates into stocks only when this sector's
+# benchmark is bullish.  Otherwise its allocation is held in the hedge.
+market_regime:
+  timeframe: WEEKLY
+  supertrend_period: 10
+  supertrend_multiplier: 3
+sector_rotation:
+  # Hold five equal-weight bullish sectors.  A selected sector is locked until
+  # its own Supertrend becomes bearish, then its 20% slot rotates.
+  redeploy_to_bullish: true
+  stocks_per_sector: 3
+  selection_mode: TOP_RANKED_BULLISH
+  max_selected_sectors: 5
+  lock_selected_sectors_until_bearish: true
+  sector_score:
+    return_6m_weight: 0.50
+    return_3m_weight: 0.30
+    return_1m_weight: 0.20
+  # Holdings exit on a fixed 30% loss from entry, not on rank deterioration.
+  daily_rank_exit: false
+  rank_exit_enabled: false
+  stop_loss_pct: 0.30
+  ranking_scope: UNIVERSE_BEFORE_FILTERS
+  market_cap_filter_enabled: true
+  # Never backfill a rejected top-3 stock with rank 4 or below.  A rejected
+  # slot remains in cash until a later permitted entry date.
+  strict_top_rank_entries: true
+  refill_on_monthly_rebalance_only: true
+market_hedge:
+  # If fewer than five eligible bullish sectors exist, unused slots stay cash.
+  enabled: false
+  symbol: GOLDBEES
+sleeves:
+  - {universe: NIFTY_AUTO, index_name: NIFTY_AUTO, capital: 52631.57894736842, portfolio_size: 3}
+  - {universe: NIFTY_BANK, index_name: NIFTY_BANK, capital: 52631.57894736842, portfolio_size: 3}
+  - {universe: NIFTY_CHEMICALS, index_name: NIFTY_CHEMICALS, capital: 52631.57894736842, portfolio_size: 3}
+  - {universe: NIFTY_CONSUMER_DURABLES, index_name: NIFTY_CONSUMER_DURABLES, capital: 52631.57894736842, portfolio_size: 3}
+  - {universe: NIFTY_FINANCIAL_SERVICES, index_name: NIFTY_FINANCIAL_SERVICES, capital: 52631.57894736842, portfolio_size: 3}
+  - {universe: NIFTY_FINANCIAL_SERVICES_EX_BANK, index_name: NIFTY_FINANCIAL_SERVICES_EX_BANK, capital: 52631.57894736842, portfolio_size: 3}
+  - {universe: NIFTY_FMCG, index_name: NIFTY_FMCG, capital: 52631.57894736842, portfolio_size: 3}
+  - {universe: NIFTY_HEALTHCARE, index_name: NIFTY_HEALTHCARE, capital: 52631.57894736842, portfolio_size: 3}
+  - {universe: NIFTY_IT, index_name: NIFTY_IT, capital: 52631.57894736842, portfolio_size: 3}
+  - {universe: NIFTY_MEDIA, index_name: NIFTY_MEDIA, capital: 52631.57894736842, portfolio_size: 3}
+  - {universe: NIFTY_METAL, index_name: NIFTY_METAL, capital: 52631.57894736842, portfolio_size: 3}
+  - {universe: NIFTY_OIL_GAS, index_name: NIFTY_OIL_GAS, capital: 52631.57894736842, portfolio_size: 3}
+  - {universe: NIFTY_PHARMA, index_name: NIFTY_PHARMA, capital: 52631.57894736842, portfolio_size: 3}
+  - {universe: NIFTY_PRIVATE_BANK, index_name: NIFTY_PRIVATE_BANK, capital: 52631.57894736842, portfolio_size: 3}
+  - {universe: NIFTY_PSU_BANK, index_name: NIFTY_PSU_BANK, capital: 52631.57894736842, portfolio_size: 3}
+  - {universe: NIFTY_REALTY, index_name: NIFTY_REALTY, capital: 52631.57894736842, portfolio_size: 3}
+  - {universe: NIFTY_MIDSMALL_FINANCIAL_SERVICES, index_name: NIFTY_MIDSMALL_FINANCIAL_SERVICES, capital: 52631.57894736842, portfolio_size: 3}
+  - {universe: NIFTY_MIDSMALL_HEALTHCARE, index_name: NIFTY_MIDSMALL_HEALTHCARE, capital: 52631.57894736842, portfolio_size: 3}
+  - {universe: NIFTY_MIDSMALL_IT_TELECOM, index_name: NIFTY_MIDSMALL_IT_TELECOM, capital: 52631.57894736842, portfolio_size: 3}

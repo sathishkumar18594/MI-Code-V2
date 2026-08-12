@@ -1,0 +1,16 @@
+strategy_name: Breadth Rotation Momentum
+initial_capital: 1000000
+portfolio_size: 10
+
+# Select the first bullish universe. This orders the strategy from the
+# broadest opportunity set toward increasingly concentrated large caps.
+rotation_priority:
+  - NIFTY500
+  - NIFTY200
+  - NIFTY100
+  - NIFTY50
+
+market_hedge:
+  enabled: true
+  symbol: GOLDBEES
+

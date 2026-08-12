@@ -1,0 +1,18 @@
+initial_capital: 3000000
+sleeves:
+  - universe: NIFTY50
+    index_symbol: "^NSEI"
+    capital: 700000
+    portfolio_size: 3
+  - universe: NIFTY100
+    index_symbol: "^CNX100"
+    capital: 1200000
+    portfolio_size: 3
+  - universe: NIFTY200
+    index_symbol: "^CNX200"
+    capital: 600000
+    portfolio_size: 5
+  - universe: NIFTY500
+    index_symbol: "^CRSLDX"
+    capital: 500000
+    portfolio_size: 5

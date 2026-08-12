@@ -1,0 +1,12 @@
+initial_capital: 1000000
+market_hedge:
+  enabled: false
+sleeves:
+  - universe: NIFTY100
+    index_symbol: "^CNX100"
+    capital: 500000
+    portfolio_size: 5
+  - universe: NIFTY500
+    index_symbol: "^CRSLDX"
+    capital: 500000
+    portfolio_size: 10
