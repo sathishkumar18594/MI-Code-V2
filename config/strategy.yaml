@@ -16,6 +16,13 @@ liquidity:
 market_cap_filter:
   enabled: true
   min_market_cap_crore: 5000
+  min_market_cap_crore_by_year:
+    2021: 5000
+    2022: 6000
+    2023: 7000
+    2024: 8000
+    2025: 9000
+    2026: 10000
   data_file: data_v2/upstox/manifests/nifty500_isin_market_cap_timeline_2016_2026.csv
 
 circuit_filter:

@@ -170,6 +170,7 @@ class RankingService:
         self,
         rows,
         apply_circuit_filter=False,
+        trading_date=None,
     ) -> list[Ranking]:
         if not rows:
             return []
@@ -186,7 +187,10 @@ class RankingService:
                 universe = self.liquidity_service.filter(universe)
                 universe = self.circuit_risk_service.filter(universe)
                 if self.apply_market_cap_filter:
-                    universe = self.market_cap_service.filter(universe)
+                    universe = self.market_cap_service.filter(
+                        universe,
+                        as_of_date=trading_date,
+                    )
             pre_scored = True
         else:
             pre_scored = False
@@ -197,7 +201,10 @@ class RankingService:
         if apply_circuit_filter and not pre_scored:
             universe = self.circuit_risk_service.filter(universe)
             if self.apply_market_cap_filter:
-                universe = self.market_cap_service.filter(universe)
+                universe = self.market_cap_service.filter(
+                    universe,
+                    as_of_date=trading_date,
+                )
 
         if not pre_scored:
             universe = self.scoring_service.calculate(universe)
@@ -252,7 +259,7 @@ class RankingService:
             trading_date=rebalance_date,
             use_dataframe_cache=False,
         )
-        return self._build_rankings(rows)
+        return self._build_rankings(rows, trading_date=rebalance_date)
 
     def build_cache(
         self,
@@ -290,10 +297,14 @@ class RankingService:
                 trading_date=trading_date,
                 use_dataframe_cache=True,
             )
-            self.cache[trading_date] = self._build_rankings(rows)
+            self.cache[trading_date] = self._build_rankings(
+                rows,
+                trading_date=trading_date,
+            )
             self.entry_cache[trading_date] = self._build_rankings(
                 rows,
                 apply_circuit_filter=True,
+                trading_date=trading_date,
             )
 
     def get_rankings(
@@ -306,7 +317,7 @@ class RankingService:
                 trading_date=trading_date,
                 use_dataframe_cache=True,
             )
-            return self._build_rankings(rows)
+            return self._build_rankings(rows, trading_date=trading_date)
         return self.cache.get(trading_date, [])
 
     def get_entry_rankings(self, trading_date):
@@ -316,5 +327,9 @@ class RankingService:
                 trading_date=trading_date,
                 use_dataframe_cache=True,
             )
-            return self._build_rankings(rows, apply_circuit_filter=True)
+            return self._build_rankings(
+                rows,
+                apply_circuit_filter=True,
+                trading_date=trading_date,
+            )
         return self.entry_cache.get(trading_date, [])

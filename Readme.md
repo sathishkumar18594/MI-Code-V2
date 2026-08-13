@@ -24,5 +24,19 @@ python3 -m venv .venv
 .venv/bin/streamlit run streamlit_app.py
 ```
 
+Refresh the Nifty 500 stock store incrementally. Each Upstox response is first
+saved as a raw CSV and then merged into its ISIN Parquet file. Subsequent runs
+request only sessions after the latest locally stored candle:
+
+```bash
+.venv/bin/python -m providers.upstox_stock_provider sync --universe nifty500
+```
+
+The benchmark index has its own updater:
+
+```bash
+.venv/bin/python -m providers.upstox_index_provider sync
+```
+
 The Streamlit workspace launches the original `run_backtest.py` and
 `run_current_portfolio.py` workflows and exposes their generated CSV reports.

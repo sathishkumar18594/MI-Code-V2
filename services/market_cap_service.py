@@ -19,6 +19,12 @@ class MarketCapService:
         self.minimum_market_cap_crore = float(
             settings.get("min_market_cap_crore", 0.0)
         )
+        self.minimum_market_cap_crore_by_year = {
+            int(year): float(minimum)
+            for year, minimum in settings.get(
+                "min_market_cap_crore_by_year", {}
+            ).items()
+        }
         self.data_file = Path(settings.get("data_file", self.DEFAULT_FILE))
         self.history_by_symbol = self._load_history() if self.enabled else {}
 
@@ -77,10 +83,25 @@ class MarketCapService:
         symbol = "".join(str(symbol).upper().split())
         return self.SYMBOL_ALIASES.get(symbol, symbol)
 
-    def filter(self, universe: pd.DataFrame) -> pd.DataFrame:
+    def minimum_for_date(self, date) -> float:
+        """Return the configured threshold in force on the signal date."""
+        if date is None or not self.minimum_market_cap_crore_by_year:
+            return self.minimum_market_cap_crore
+        year = pd.Timestamp(date).year
+        effective_years = [
+            configured_year
+            for configured_year in self.minimum_market_cap_crore_by_year
+            if configured_year <= year
+        ]
+        if not effective_years:
+            return self.minimum_market_cap_crore
+        return self.minimum_market_cap_crore_by_year[max(effective_years)]
+
+    def filter(self, universe: pd.DataFrame, as_of_date=None) -> pd.DataFrame:
         if not self.enabled:
             return universe.copy()
+        minimum = self.minimum_for_date(as_of_date)
         return universe[
             universe["market_cap_crore"].notna()
-            & (universe["market_cap_crore"] > self.minimum_market_cap_crore)
+            & (universe["market_cap_crore"] > minimum)
         ].copy()

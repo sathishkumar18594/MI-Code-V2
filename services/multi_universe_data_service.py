@@ -143,6 +143,7 @@ class MultiUniverseDataService:
             return "LOWER_CIRCUIT_FILTER"
         ranker = self.rankers[universe]
         market_cap = ranker.market_cap_service.market_cap_as_of(symbol, date)
+        minimum_market_cap = ranker.market_cap_service.minimum_for_date(date)
         if (
             self.config.get("sector_rotation", {}).get(
                 "market_cap_filter_enabled", True
@@ -150,7 +151,7 @@ class MultiUniverseDataService:
             and ranker.market_cap_service.enabled
             and (
                 market_cap is None
-                or market_cap <= ranker.market_cap_service.minimum_market_cap_crore
+                or market_cap <= minimum_market_cap
             )
         ):
             return "MARKET_CAP_FILTER"
