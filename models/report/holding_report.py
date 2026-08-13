@@ -11,6 +11,10 @@ class HoldingReport:
 
     symbol: str
 
+    market_cap_crore: float | None
+
+    industry: str | None
+
     rank: int
 
     score: float

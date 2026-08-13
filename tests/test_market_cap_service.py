@@ -25,11 +25,15 @@ def write_history(path):
                 "as_of_date": "2020-12-31",
                 "symbol": "ABC",
                 "nse_6m_avg_total_market_cap_crore": 9000,
+                "industry_as_of_date": "2020-12-31",
+                "industry": "Old Industry",
             },
             {
                 "as_of_date": "2021-12-31",
                 "symbol": "ABC",
                 "nse_6m_avg_total_market_cap_crore": 12000,
+                "industry_as_of_date": "2021-12-31",
+                "industry": "New Industry",
             },
             {
                 "as_of_date": "2021-12-31",
@@ -60,6 +64,8 @@ def test_uses_latest_observation_available_on_or_before_signal_date(tmp_path):
     assert service.market_cap_as_of("ABC", "2020-01-01") is None
     assert service.market_cap_as_of("ARE& M", "2022-01-01") == 11000
     assert service.market_cap_as_of("ORACLE", "2022-01-01") == 25000
+    assert service.industry_as_of("ABC", "2021-06-30") == "Old Industry"
+    assert service.industry_as_of("ABC", "2022-01-01") == "New Industry"
 
 
 def test_filter_is_strictly_greater_than_threshold_and_rejects_missing(tmp_path):

@@ -3,14 +3,18 @@ from __future__ import annotations
 
 import argparse
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote
 
 import pandas as pd
 import requests
 
-from providers.upstox_index_provider import access_token
+from providers.upstox_index_provider import (
+    access_token,
+    current_day_candle_available,
+    fetch_current_day_candle,
+)
 
 
 PRICE_COLUMNS = [
@@ -108,6 +112,7 @@ def sync_stock(
     to_date: date | None = None,
     token: str | None = None,
     request_get=None,
+    now: datetime | None = None,
 ) -> dict[str, object]:
     root = Path(data_root)
     parquet = root / "upstox" / "parquet_by_isin" / f"{isin}.parquet"
@@ -150,6 +155,21 @@ def sync_stock(
     if payload.get("status") != "success":
         raise RuntimeError(f"Upstox response was not successful: {payload}")
     frame = _normalise_candles(payload.get("data", {}).get("candles", []))
+    has_to_date = not frame.empty and to_date in set(frame["date"].dt.date)
+    if not has_to_date and current_day_candle_available(to_date, now):
+        current_day = fetch_current_day_candle(
+            instrument_key,
+            to_date,
+            token or access_token(),
+            get,
+        ).rename(columns={
+            "Date": "date", "Open": "open", "High": "high", "Low": "low",
+            "Close": "close", "Volume": "volume", "Open Interest": "open_interest",
+        })
+        frame = pd.concat([frame, current_day[PRICE_COLUMNS]], ignore_index=True)
+        if not frame.empty:
+            frame["date"] = pd.to_datetime(frame["date"])
+            frame = frame.sort_values("date").drop_duplicates("date", keep="last")
     if frame.empty:
         result["status"] = "NO_NEW_CANDLES"
         return result

@@ -11,6 +11,10 @@ class TradeReport:
 
     symbol: str
 
+    market_cap_crore: float | None
+
+    industry: str | None
+
     entry_date: datetime
     entry_rank: int
 

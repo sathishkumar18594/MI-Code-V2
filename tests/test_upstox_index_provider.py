@@ -1,5 +1,6 @@
 import json
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -52,3 +53,37 @@ def test_sync_requests_only_dates_after_latest_candle(tmp_path):
     assert requested["url"].endswith("/2026-08-12/2026-08-12")
     assert added == 1
     assert len(pd.read_parquet(output)) == 2
+
+
+def test_sync_uses_current_day_endpoint_after_market_close(tmp_path):
+    output = tmp_path / "NIFTY500.parquet"
+    requested = []
+
+    class Response:
+        def __init__(self, candles):
+            self.candles = candles
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"status": "success", "data": {"candles": self.candles}}
+
+    def fake_get(url, **kwargs):
+        requested.append(url)
+        return Response(
+            [candle("2026-08-13", 103)] if "/intraday/" in url else []
+        )
+
+    _, added = sync_nifty500_index(
+        output,
+        start_date=date(2026, 8, 13),
+        to_date=date(2026, 8, 13),
+        token="test-token",
+        request_get=fake_get,
+        now=datetime(2026, 8, 13, 16, 0, tzinfo=ZoneInfo("Asia/Kolkata")),
+    )
+
+    assert any("/intraday/" in url for url in requested)
+    assert added == 1
+    assert pd.read_parquet(output)["Date"].dt.date.tolist() == [date(2026, 8, 13)]

@@ -27,6 +27,8 @@ class MarketCapService:
         }
         self.data_file = Path(settings.get("data_file", self.DEFAULT_FILE))
         self.history_by_symbol = self._load_history() if self.enabled else {}
+        self.industry_by_symbol = self._build_industry_history()
+        self.current_industry_by_symbol = self._load_current_industries()
 
     def _load_history(self) -> dict[str, pd.DataFrame]:
         if not self.data_file.exists():
@@ -65,6 +67,43 @@ class MarketCapService:
             for symbol, frame in data.groupby("symbol", sort=False)
         }
 
+    def _build_industry_history(self) -> dict[str, pd.DataFrame]:
+        histories = {}
+        for symbol, frame in self.history_by_symbol.items():
+            if not {"industry", "industry_as_of_date"}.issubset(frame.columns):
+                continue
+            industry = frame[["industry_as_of_date", "industry"]].copy()
+            industry["industry_as_of_date"] = pd.to_datetime(
+                industry["industry_as_of_date"], errors="coerce"
+            )
+            industry["industry"] = industry["industry"].fillna("").astype(str).str.strip()
+            industry = industry.dropna(subset=["industry_as_of_date"])
+            industry = industry[industry["industry"].ne("")]
+            if not industry.empty:
+                histories[symbol] = industry.sort_values(
+                    "industry_as_of_date"
+                ).drop_duplicates("industry_as_of_date", keep="last").reset_index(drop=True)
+        return histories
+
+    def _load_current_industries(self) -> dict[str, str]:
+        if not self.enabled:
+            return {}
+        data_root = next(
+            (parent for parent in self.data_file.parents if parent.name == "data_v2"),
+            Path("data_v2"),
+        )
+        universe_file = data_root / "universe" / "nifty500.csv"
+        if not universe_file.exists():
+            return {}
+        universe = pd.read_csv(universe_file, dtype=str).fillna("")
+        if not {"Symbol", "Industry"}.issubset(universe.columns):
+            return {}
+        return {
+            self._normalise_symbol(symbol): industry.strip()
+            for symbol, industry in universe[["Symbol", "Industry"]].itertuples(index=False)
+            if symbol.strip() and industry.strip()
+        }
+
     def market_cap_as_of(self, symbol: str, date) -> float | None:
         if not self.enabled:
             return None
@@ -78,6 +117,19 @@ class MarketCapService:
         return float(
             history.iloc[index]["nse_6m_avg_total_market_cap_crore"]
         )
+
+    def industry_as_of(self, symbol: str, date) -> str | None:
+        if not self.enabled:
+            return None
+        normalized_symbol = self._normalise_symbol(symbol)
+        history = self.industry_by_symbol.get(normalized_symbol)
+        if history is None or history.empty:
+            return self.current_industry_by_symbol.get(normalized_symbol)
+        date = pd.Timestamp(date).normalize()
+        index = history["industry_as_of_date"].searchsorted(date, side="right") - 1
+        if index < 0:
+            return self.current_industry_by_symbol.get(normalized_symbol)
+        return str(history.iloc[index]["industry"])
 
     def _normalise_symbol(self, symbol: str) -> str:
         symbol = "".join(str(symbol).upper().split())

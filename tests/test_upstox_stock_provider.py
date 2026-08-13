@@ -1,4 +1,5 @@
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -60,3 +61,36 @@ def test_sync_does_not_call_upstox_when_parquet_is_current(tmp_path):
 
     assert result["status"] == "CURRENT"
     assert result["rows_added"] == 0
+
+
+def test_stock_sync_uses_current_day_endpoint_after_market_close(tmp_path):
+    requested = []
+
+    class Response:
+        def __init__(self, candles):
+            self.candles = candles
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"status": "success", "data": {"candles": self.candles}}
+
+    def fake_get(url, **kwargs):
+        requested.append(url)
+        return Response(
+            [candle("2026-08-13", 103)] if "/intraday/" in url else []
+        )
+
+    result = sync_stock(
+        "ABC", "INE000A01001", tmp_path / "data_v2",
+        start_date=date(2026, 8, 13),
+        to_date=date(2026, 8, 13),
+        token="token",
+        request_get=fake_get,
+        now=datetime(2026, 8, 13, 16, 0, tzinfo=ZoneInfo("Asia/Kolkata")),
+    )
+
+    assert any("/intraday/" in url for url in requested)
+    assert result["status"] == "UPDATED"
+    assert result["rows_added"] == 1

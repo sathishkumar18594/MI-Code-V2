@@ -113,6 +113,9 @@ class RankingService:
                         trading_date,
                     )
                 )
+                latest["industry"] = self.market_cap_service.industry_as_of(
+                    symbol, trading_date
+                )
                 rows.append(latest)
         else:
             for symbol in symbols:
@@ -150,6 +153,9 @@ class RankingService:
                         symbol,
                         trading_date,
                     )
+                )
+                latest["industry"] = self.market_cap_service.industry_as_of(
+                    symbol, trading_date
                 )
 
                 rows.append(latest)
@@ -237,6 +243,7 @@ class RankingService:
                 )
             )
             factor_values["market_cap_crore"] = row.get("market_cap_crore")
+            factor_values["industry"] = row.get("industry")
             rankings.append(
                 Ranking(
                     rank=int(row["_overall_rank"]) if "_overall_rank" in row else index,

@@ -41,9 +41,13 @@ def load_report(path: str, modified_at: float) -> tuple[dict[str, str], pd.DataF
 
     metadata: dict[str, str] = {}
     header_index = 0
-    if len(rows) >= 3 and rows[0][:1] == ["Trading Date"]:
-        metadata["Trading Date"] = rows[0][1] if len(rows[0]) > 1 else ""
-        header_index = 2 if not rows[1] else 1
+    if rows and rows[0][:1] == ["Trading Date"]:
+        while header_index < len(rows) and rows[header_index]:
+            row = rows[header_index]
+            metadata[row[0]] = row[1] if len(row) > 1 else ""
+            header_index += 1
+        if header_index < len(rows) and not rows[header_index]:
+            header_index += 1
 
     if header_index >= len(rows):
         return metadata, pd.DataFrame()
@@ -186,9 +190,10 @@ if page == "Reports":
             "Run Current portfolio again to apply the latest strategy rules."
         )
     metadata, frame = load_report(str(report), report.stat().st_mtime)
-    summary = st.columns(2)
+    summary = st.columns(3)
     summary[0].metric("Rows", f"{len(frame):,}")
     summary[1].metric("Trading date", metadata.get("Trading Date", "—"))
+    summary[2].metric("Market data through", metadata.get("Market Data Through", "—"))
 
     query = st.text_input("Filter rows", placeholder="Type a symbol, rank, value, or date")
     visible = frame
@@ -253,7 +258,9 @@ else:
     expected_symbols = len(current)
     st.info(
         "Current rules: rank exits and replacements run only on monthly "
-        "rebalance signals; market-regime exits and bullish re-entry remain immediate."
+        "rebalance signals. Completed buys and sells remain available in the "
+        "action history with their original signal and execution details; "
+        "market-regime exits and bullish re-entry remain immediate."
     )
     st.caption("Generate the latest Nifty 500 rankings, portfolio, and scheduled actions.")
     command = [sys.executable, "run_current_portfolio.py"]

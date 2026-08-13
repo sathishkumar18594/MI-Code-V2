@@ -4,9 +4,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import requests
@@ -16,6 +17,8 @@ INSTRUMENT_KEY = "NSE_INDEX|Nifty 500"
 DEFAULT_OUTPUT = Path("data_v2/upstox/index/NIFTY500.parquet")
 DEFAULT_START = date(2020, 1, 1)
 COLUMNS = ["Date", "Open", "High", "Low", "Close", "Volume", "Open Interest"]
+INDIA_TIMEZONE = ZoneInfo("Asia/Kolkata")
+MARKET_DATA_FINAL_AFTER = time(15, 35)
 
 
 def access_token(project_root: str | Path = ".") -> str:
@@ -54,6 +57,41 @@ def write_index(frame: pd.DataFrame, output: str | Path = DEFAULT_OUTPUT) -> Pat
     return output
 
 
+def current_day_candle_available(to_date: date, now: datetime | None = None) -> bool:
+    """Use Upstox intraday daily candles only after the NSE session is final."""
+    current = now or datetime.now(INDIA_TIMEZONE)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=INDIA_TIMEZONE)
+    else:
+        current = current.astimezone(INDIA_TIMEZONE)
+    return to_date == current.date() and current.time() >= MARKET_DATA_FINAL_AFTER
+
+
+def fetch_current_day_candle(
+    instrument_key: str,
+    to_date: date,
+    token: str,
+    request_get,
+) -> pd.DataFrame:
+    url = (
+        "https://api.upstox.com/v3/historical-candle/intraday/"
+        f"{quote(instrument_key, safe='')}/days/1"
+    )
+    response = request_get(
+        url,
+        headers={"Accept": "application/json", "Authorization": f"Bearer {token}"},
+        timeout=60,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if payload.get("status") != "success":
+        raise RuntimeError(f"Upstox response was not successful: {payload}")
+    frame = candles_frame(payload.get("data", {}).get("candles", []))
+    if frame.empty:
+        return frame
+    return frame[frame["Date"].dt.date == to_date].copy()
+
+
 def import_index_json(json_path: str | Path, output: str | Path = DEFAULT_OUTPUT) -> Path:
     payload = json.loads(Path(json_path).read_text(encoding="utf-8"))
     if payload.get("status") != "success":
@@ -70,6 +108,7 @@ def sync_nifty500_index(
     to_date: date | None = None,
     token: str | None = None,
     request_get=None,
+    now: datetime | None = None,
 ) -> tuple[Path, int]:
     """Append only sessions after the last locally stored index candle."""
     output = Path(output)
@@ -101,6 +140,22 @@ def sync_nifty500_index(
     if payload.get("status") != "success":
         raise RuntimeError(f"Upstox response was not successful: {payload}")
     additions = candles_frame(payload.get("data", {}).get("candles", []))
+    resolved_token = token or access_token()
+    has_to_date = (
+        not additions.empty and to_date in set(additions["Date"].dt.date)
+    )
+    if not has_to_date and current_day_candle_available(to_date, now):
+        current_day = fetch_current_day_candle(
+            INSTRUMENT_KEY,
+            to_date,
+            resolved_token,
+            get,
+        )
+        additions = pd.concat([additions, current_day], ignore_index=True)
+        if not additions.empty:
+            additions = additions.sort_values("Date").drop_duplicates(
+                "Date", keep="last"
+            )
     if additions.empty:
         return output, 0
 

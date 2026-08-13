@@ -17,7 +17,9 @@ from models.report.annual_asset_contribution_report import (
 from models.report.asset_class_performance_report import (
     AssetClassPerformanceReport,
 )
+import pandas as pd
 from application.app_context import AppContext
+from services.market_cap_service import MarketCapService
 
 
 
@@ -31,6 +33,15 @@ class ReportBuilder:
         self.context = context
         self.config = context.config
         self.report_service = context.report_service
+        self.market_cap_service = MarketCapService(context)
+
+    def _stock_metadata(self, symbol, date):
+        return {
+            "market_cap_crore": self.market_cap_service.market_cap_as_of(
+                symbol, date
+            ),
+            "industry": self.market_cap_service.industry_as_of(symbol, date),
+        }
 
     def build(
         self,
@@ -199,6 +210,10 @@ class ReportBuilder:
                 summary["unrealized_pnl"] += holding.market_value - holding.cost_value
 
         reports = []
+        report_date = (
+            result.periods[-1].portfolio.rebalance_date
+            if result.periods else pd.Timestamp.today()
+        )
         for summary in summaries.values():
             summary["total_invested_amount"] = (
                 summary["closed_invested_amount"] + summary["open_invested_amount"]
@@ -208,7 +223,10 @@ class ReportBuilder:
                 summary["total_pnl"] / summary["total_invested_amount"]
                 if summary["total_invested_amount"] else 0.0
             )
-            reports.append(StockSummaryReport(**summary))
+            reports.append(StockSummaryReport(
+                **self._stock_metadata(summary["symbol"], report_date),
+                **summary,
+            ))
 
         return sorted(reports, key=lambda report: report.total_pnl, reverse=True)
 
@@ -347,6 +365,9 @@ class ReportBuilder:
                     HoldingReport(
                         rebalance_date=period.portfolio.rebalance_date,
                         symbol=holding.symbol,
+                        **self._stock_metadata(
+                            holding.symbol, period.portfolio.rebalance_date
+                        ),
                         rank=holding.rank,
                         score=holding.score,
                         weight=holding.weight,
@@ -389,6 +410,7 @@ class ReportBuilder:
                 trades.append(
                     TradeReport(
                         symbol=trade.symbol,
+                        **self._stock_metadata(trade.symbol, trade.entry_date),
                         entry_date=trade.entry_date,
                         entry_rank=trade.entry_rank,
                         exit_date=trade.exit_date,
@@ -635,6 +657,9 @@ class ReportBuilder:
                         action="SELL",
                         symbol=trade.symbol,
                         reason=trade.sell_reason,
+                        **self._stock_metadata(trade.symbol, trade.exit_date),
+                        rank_before=trade.entry_rank,
+                        rank_after=trade.exit_rank,
                         quantity=trade.quantity,
                         entry_price=trade.entry_price,
                         exit_price=trade.exit_price,
@@ -642,6 +667,10 @@ class ReportBuilder:
                         transaction_cost=trade.total_charges,
                         portfolio_value=portfolio.total_value,
                         cash_after=portfolio.cash,
+                        gross_realized_pnl=trade.gross_realized_pnl,
+                        net_realized_pnl=trade.net_realized_pnl,
+                        return_pct=trade.return_pct,
+                        holding_days=trade.holding_days,
                         notes="",
                     )
                 )
@@ -658,6 +687,10 @@ class ReportBuilder:
                         action="BUY",
                         symbol=holding.symbol,
                         reason="NEW_POSITION",
+                        **self._stock_metadata(
+                            holding.symbol, portfolio.rebalance_date
+                        ),
+                        rank_before=None,
                         rank_after=holding.rank,
                         score=holding.score,
                         weight_after=holding.weight,

@@ -54,6 +54,11 @@ def main():
         if requested_date
         else context.price_repository.latest_trading_date()
     )
+    report_date = (
+        pd.Timestamp(requested_date).normalize()
+        if requested_date
+        else pd.Timestamp.now(tz="Asia/Kolkata").normalize().tz_localize(None)
+    )
 
     # Live selection always uses the latest published constituent list.  The
     # backtest separately uses date-specific historical constituents; only
@@ -62,11 +67,9 @@ def main():
         universe_name.lower()
     )
 
-    trading_dates = [latest_date]
-
     ranking_service.build_cache(
         symbols=symbols,
-        trading_dates=trading_dates,
+        trading_dates=[latest_date],
     )
 
     market_bullish = (
@@ -121,7 +124,12 @@ def main():
     with action_history_file.open("w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
         writer.writerow([
-            "Action date", "Scheduled execution", "Action", "Symbol", "Reason", "Rank", "Score",
+            "Signal date", "Execution date", "Action", "Symbol", "Reason",
+            "Market Cap (Rs. Crore)", "Industry", "Entry rank", "Exit rank",
+            "Score", "Quantity", "Entry price",
+            "Exit price", "Trade value", "Transaction cost",
+            "Gross realized P&L", "Net realized P&L", "Return %",
+            "Holding days", "Portfolio value after", "Cash after", "Notes",
         ])
         for decision in action_history:
             execution_date = pd.Timestamp(decision.decision_date).normalize()
@@ -135,12 +143,31 @@ def main():
                 decision.action,
                 decision.symbol,
                 decision.reason,
+                decision.market_cap_crore,
+                decision.industry,
                 (
                     decision.rank_after
-                    if decision.rank_after is not None
+                    if decision.action == "BUY"
                     else decision.rank_before
                 ),
+                decision.rank_after if decision.action == "SELL" else None,
                 decision.score,
+                decision.quantity,
+                decision.entry_price,
+                decision.exit_price,
+                decision.trade_value,
+                decision.transaction_cost,
+                decision.gross_realized_pnl,
+                decision.net_realized_pnl,
+                (
+                    decision.return_pct * 100
+                    if decision.return_pct is not None
+                    else None
+                ),
+                decision.holding_days,
+                decision.portfolio_value,
+                decision.cash_after,
+                decision.notes,
             ])
 
     rankings = ranking_service.get_rankings(
@@ -229,10 +256,29 @@ def main():
             "No scheduled changes",
         ])
 
+    enriched_actions = []
+    for action, symbol, rank, scheduled_execution, reason in actions:
+        market_cap = (
+            ranking_service.market_cap_service.market_cap_as_of(symbol, latest_date)
+            if symbol != "-" else None
+        )
+        industry = (
+            ranking_service.market_cap_service.industry_as_of(symbol, latest_date)
+            if symbol != "-" else None
+        )
+        enriched_actions.append([
+            action, symbol, rank, market_cap, industry,
+            scheduled_execution, reason,
+        ])
+    actions = enriched_actions
+
     actions_file = Path("reports/output/current_actions.csv")
     with actions_file.open("w", newline="", encoding="utf-8") as file:
         writer = csv.writer(file)
-        writer.writerow(["Action", "Symbol", "Rank", "Scheduled execution", "Reason"])
+        writer.writerow([
+            "Action", "Symbol", "Rank", "Market Cap (Rs. Crore)",
+            "Industry", "Scheduled execution", "Reason",
+        ])
         writer.writerows(actions)
 
     if not market_bullish:
@@ -255,7 +301,8 @@ def main():
     )
 
     report = report_builder.build(
-        trading_date=latest_date,
+        trading_date=report_date,
+        market_data_date=latest_date,
         portfolio=portfolio,
         rankings=entry_rankings,
     )
@@ -269,7 +316,8 @@ def main():
     print()
     print("=" * 60)
     print("Current Portfolio Generated Successfully")
-    print(f"Trading Date : {latest_date.date()}")
+    print(f"Trading Date : {report_date.date()}")
+    print(f"Market Data Through: {latest_date.date()}")
     print(f"Rankings File : {ranking_output_file}")
     print(f"Portfolio File: {portfolio_output_file}")
     print(f"Actions File  : {actions_file}")

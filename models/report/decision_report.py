@@ -17,6 +17,10 @@ class DecisionReport:
 
     reason: SellReason | str
 
+    market_cap_crore: float | None = None
+
+    industry: str | None = None
+
     rank_before: int | None = None
 
     rank_after: int | None = None
@@ -40,5 +44,13 @@ class DecisionReport:
     portfolio_value: float = 0.0
 
     cash_after: float = 0.0
+
+    gross_realized_pnl: float | None = None
+
+    net_realized_pnl: float | None = None
+
+    return_pct: float | None = None
+
+    holding_days: int | None = None
 
     notes: str = ""

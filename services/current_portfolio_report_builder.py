@@ -8,6 +8,7 @@ class CurrentPortfolioReportBuilder:
     def build(
         self,
         trading_date,
+        market_data_date,
         portfolio,
         rankings,
     ):
@@ -17,6 +18,7 @@ class CurrentPortfolioReportBuilder:
 
         return CurrentPortfolioReport(
             trading_date=trading_date,
+            market_data_date=market_data_date,
             portfolio=portfolio,
             rank_lookup=rank_lookup,
         )

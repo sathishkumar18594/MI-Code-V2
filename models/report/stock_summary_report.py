@@ -5,6 +5,8 @@ from dataclasses import dataclass
 class StockSummaryReport:
 
     symbol: str
+    market_cap_crore: float | None
+    industry: str | None
     total_invested_amount: float
     closed_invested_amount: float
     open_invested_amount: float
