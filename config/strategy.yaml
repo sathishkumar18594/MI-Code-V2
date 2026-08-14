@@ -23,6 +23,15 @@ market_cap_filter:
     2024: 8000
     2025: 9000
     2026: 10000
+  # Dated observations supplied for current constituents that are not yet in
+  # the published historical timeline. They never apply before their date.
+  point_in_time_overrides:
+    JSWDULUX:
+      as_of_date: 2026-08-14
+      market_cap_crore: 14447
+    PFOCUS:
+      as_of_date: 2026-08-14
+      market_cap_crore: 20935
   data_file: data_v2/upstox/manifests/nifty500_isin_market_cap_timeline_2016_2026.csv
 
 circuit_filter:

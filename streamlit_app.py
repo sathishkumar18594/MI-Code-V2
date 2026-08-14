@@ -109,6 +109,83 @@ def run_strategy(command: list[str], environment: dict[str, str], expected_symbo
     return return_code, "\n".join(tail)
 
 
+def run_stock_sync(
+    command: list[str], environment: dict[str, str], expected_symbols: int
+) -> tuple[int, str, Path | None]:
+    """Run the incremental stock sync with per-constituent UI progress."""
+    progress = st.progress(0.0, text="Refreshing the Nifty 500 constituents...")
+    latest = st.empty()
+    tail: deque[str] = deque(maxlen=100)
+    processed = 0
+    manifest: Path | None = None
+    environment = {**environment, "PYTHONUNBUFFERED": "1"}
+    process = subprocess.Popen(
+        command,
+        cwd=ROOT,
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+    assert process.stdout is not None
+    for line in process.stdout:
+        clean = line.rstrip()
+        tail.append(clean)
+        if clean.startswith("[UNIVERSE]"):
+            latest.caption(clean)
+        if clean.startswith(("[UPDATED]", "[CURRENT]", "[NO_NEW_CANDLES]", "[FAILED]")):
+            processed += 1
+            progress.progress(
+                min(1.0, processed / max(1, expected_symbols)),
+                text=f"Syncing Nifty 500 stocks: {processed:,}/{expected_symbols:,}",
+            )
+            latest.caption(clean)
+        if clean.startswith("Manifest: "):
+            manifest = Path(clean.removeprefix("Manifest: ").strip())
+            if not manifest.is_absolute():
+                manifest = ROOT / manifest
+
+    return_code = process.wait()
+    if return_code == 0:
+        progress.progress(1.0, text="Nifty 500 stock sync completed")
+    else:
+        progress.progress(
+            min(1.0, processed / max(1, expected_symbols)),
+            text="Nifty 500 stock sync failed",
+        )
+    return return_code, "\n".join(tail), manifest
+
+
+@st.dialog("Nifty 500 stock sync complete", width="large")
+def show_stock_sync_dialog(manifest: Path) -> None:
+    report = pd.read_csv(manifest).fillna("")
+    counts = report["status"].value_counts()
+    failed = report[report["status"] == "FAILED"]
+    rows_added = pd.to_numeric(report["rows_added"], errors="coerce").fillna(0).sum()
+
+    if failed.empty:
+        st.success("All Nifty 500 stocks were checked successfully.")
+    else:
+        st.warning(
+            f"The sync completed, but {len(failed):,} stocks failed. "
+            "Run the sync again to retry only their still-missing dates."
+        )
+    cards = st.columns(4)
+    cards[0].metric("Stocks checked", f"{len(report):,}")
+    cards[1].metric("Updated", f"{int(counts.get('UPDATED', 0)):,}")
+    cards[2].metric("Candles added", f"{int(rows_added):,}")
+    cards[3].metric("Failed", f"{len(failed):,}")
+    current = int(counts.get("CURRENT", 0) + counts.get("NO_NEW_CANDLES", 0))
+    st.caption(f"Already current / no new session: {current:,} · Manifest: {manifest}")
+    if not failed.empty:
+        st.dataframe(
+            failed[["symbol", "from_date", "to_date", "error"]],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+
 def show_backtest_summary() -> None:
     metrics_path = REPORT_ROOT / "metrics.csv"
     monthly_path = REPORT_ROOT / "monthly.csv"
@@ -166,8 +243,12 @@ if page == "Overview":
     third.metric("Upstox credential", "Available" if token else "Not configured")
     fourth.metric("Nifty 500 index", index_latest)
     st.info("Data remains ISIN-keyed in data_v2. The migrated repository resolves strategy symbols through the current Nifty universe files and presents the legacy strategy with its expected OHLCV schema.")
-    if st.button("Sync Nifty 500 index", disabled=not token):
-        with st.spinner("Downloading only sessions after the latest local index candle..."):
+    index_sync, stock_sync = st.columns(2)
+    if index_sync.button("Sync Nifty 500 index", disabled=not token, use_container_width=True):
+        with st.spinner(
+            "Downloading only sessions after the latest local index candle...",
+            show_time=True,
+        ):
             try:
                 output, added = sync_nifty500_index()
             except Exception as error:
@@ -175,6 +256,38 @@ if page == "Overview":
             else:
                 st.success(f"Added {added:,} new candles to {output}.")
                 st.rerun()
+    if stock_sync.button("Sync Nifty 500 stocks", disabled=not token, use_container_width=True):
+        current_universe = DATA_ROOT / "universe" / "nifty500.csv"
+        expected = len(pd.read_csv(current_universe)) if current_universe.exists() else 500
+        command = [
+            sys.executable,
+            "-m",
+            "providers.upstox_stock_provider",
+            "sync",
+            "--universe",
+            "nifty500",
+            "--data-root",
+            str(DATA_ROOT),
+            "--refresh-universe",
+        ]
+        with st.spinner(
+            "Refreshing constituents and downloading missing Nifty 500 stock candles...",
+            show_time=True,
+        ):
+            return_code, log_tail, manifest = run_stock_sync(
+                command, os.environ.copy(), expected
+            )
+        if return_code or manifest is None or not manifest.exists():
+            st.error("Nifty 500 stock sync failed.")
+            with st.expander("Sync log", expanded=True):
+                st.code(log_tail or "No process output")
+        else:
+            repository.clear()
+            show_stock_sync_dialog(manifest)
+    st.caption(
+        "Stock sync first refreshes the official constituents, then downloads every "
+        "daily candle after each stock's latest saved date and updates its ISIN Parquet."
+    )
     st.stop()
 
 if page == "Reports":

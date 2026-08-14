@@ -25,6 +25,15 @@ class MarketCapService:
                 "min_market_cap_crore_by_year", {}
             ).items()
         }
+        self.point_in_time_overrides = {
+            self._normalise_symbol(symbol): {
+                "as_of_date": pd.Timestamp(details["as_of_date"]).normalize(),
+                "market_cap_crore": float(details["market_cap_crore"]),
+            }
+            for symbol, details in settings.get(
+                "point_in_time_overrides", {}
+            ).items()
+        }
         self.data_file = Path(settings.get("data_file", self.DEFAULT_FILE))
         self.history_by_symbol = self._load_history() if self.enabled else {}
         self.industry_by_symbol = self._build_industry_history()
@@ -107,11 +116,24 @@ class MarketCapService:
     def market_cap_as_of(self, symbol: str, date) -> float | None:
         if not self.enabled:
             return None
-        history = self.history_by_symbol.get(self._normalise_symbol(symbol))
-        if history is None or history.empty:
-            return None
+        normalized_symbol = self._normalise_symbol(symbol)
         date = pd.Timestamp(date).normalize()
-        index = history["as_of_date"].searchsorted(date, side="right") - 1
+        override = self.point_in_time_overrides.get(normalized_symbol)
+        history = self.history_by_symbol.get(normalized_symbol)
+        index = (
+            history["as_of_date"].searchsorted(date, side="right") - 1
+            if history is not None and not history.empty
+            else -1
+        )
+        if (
+            override is not None
+            and override["as_of_date"] <= date
+            and (
+                index < 0
+                or override["as_of_date"] >= history.iloc[index]["as_of_date"]
+            )
+        ):
+            return override["market_cap_crore"]
         if index < 0:
             return None
         return float(

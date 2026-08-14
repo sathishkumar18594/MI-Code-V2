@@ -15,6 +15,7 @@ from providers.upstox_index_provider import (
     current_day_candle_available,
     fetch_current_day_candle,
 )
+from services.universe_service import UniverseService
 
 
 PRICE_COLUMNS = [
@@ -190,8 +191,21 @@ def sync_universe(
     pause_seconds: float = 0.05,
     token: str | None = None,
     request_get=None,
+    refresh_universe: bool = False,
 ) -> Path:
     root = Path(data_root)
+    if refresh_universe:
+        # Resolve UniverseService's relative data_v2 path against the selected
+        # data root so the CLI and Streamlit always refresh the same file that
+        # this sync is about to consume.
+        service = UniverseService()
+        service.folder = root / "universe"
+        service.folder.mkdir(parents=True, exist_ok=True)
+        service.history_folder = service.folder / "history"
+        service.history_folder.mkdir(parents=True, exist_ok=True)
+        refreshed = service.refresh(universe.lower())
+        print(f"[UNIVERSE] {universe.upper()} constituents={len(refreshed)}")
+
     universe_path = root / "universe" / f"{universe.lower()}.csv"
     if not universe_path.exists():
         raise FileNotFoundError(f"Universe file not found: {universe_path}")
@@ -253,6 +267,11 @@ def main() -> int:
     sync_parser.add_argument("--start-date", type=date.fromisoformat, default=DEFAULT_START)
     sync_parser.add_argument("--to-date", type=date.fromisoformat)
     sync_parser.add_argument("--pause-seconds", type=float, default=0.05)
+    sync_parser.add_argument(
+        "--refresh-universe",
+        action="store_true",
+        help="Download the latest official constituents before syncing candles.",
+    )
     args = parser.parse_args()
     output = sync_universe(
         universe=args.universe,
@@ -260,6 +279,7 @@ def main() -> int:
         start_date=args.start_date,
         to_date=args.to_date,
         pause_seconds=args.pause_seconds,
+        refresh_universe=args.refresh_universe,
     )
     report = pd.read_csv(output)
     print(report.groupby("status").size().to_string())

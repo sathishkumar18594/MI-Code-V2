@@ -5,13 +5,14 @@ import pandas as pd
 from services.market_cap_service import MarketCapService
 
 
-def context(data_file, minimum=10000, yearly_minimums=None):
+def context(data_file, minimum=10000, yearly_minimums=None, overrides=None):
     return SimpleNamespace(
         config={
             "market_cap_filter": {
                 "enabled": True,
                 "min_market_cap_crore": minimum,
                 "min_market_cap_crore_by_year": yearly_minimums or {},
+                "point_in_time_overrides": overrides or {},
                 "data_file": str(data_file),
             }
         }
@@ -118,3 +119,48 @@ def test_filter_uses_threshold_in_force_for_signal_year(tmp_path):
     assert service.filter(universe, "2026-06-30").empty
     assert service.minimum_for_date("2027-01-01") == 10000
     assert service.minimum_for_date("2020-12-31") == 5000
+
+
+def test_point_in_time_override_does_not_leak_into_earlier_dates(tmp_path):
+    data_file = tmp_path / "market_cap.csv"
+    write_history(data_file)
+    service = MarketCapService(
+        context(
+            data_file,
+            overrides={
+                "NEWCO": {
+                    "as_of_date": "2026-08-14",
+                    "market_cap_crore": 14447,
+                }
+            },
+        )
+    )
+
+    assert service.market_cap_as_of("NEWCO", "2026-08-13") is None
+    assert service.market_cap_as_of("NEWCO", "2026-08-14") == 14447
+    assert service.market_cap_as_of("NEWCO", "2027-01-01") == 14447
+
+
+def test_newer_official_observation_supersedes_override(tmp_path):
+    data_file = tmp_path / "market_cap.csv"
+    pd.DataFrame([
+        {
+            "as_of_date": "2026-12-31",
+            "symbol": "NEWCO",
+            "nse_6m_avg_total_market_cap_crore": 18000,
+        }
+    ]).to_csv(data_file, index=False)
+    service = MarketCapService(
+        context(
+            data_file,
+            overrides={
+                "NEWCO": {
+                    "as_of_date": "2026-08-14",
+                    "market_cap_crore": 14447,
+                }
+            },
+        )
+    )
+
+    assert service.market_cap_as_of("NEWCO", "2026-08-14") == 14447
+    assert service.market_cap_as_of("NEWCO", "2026-12-31") == 18000
